@@ -42,7 +42,7 @@ Hopefully, gerd can be of use for someone.
 pip install gerd
 ```
 ### Read input from CSV or use pandas DataFrames directly
-Example input files can be found in [examples](examples/).
+Example input files can be found in [examples](https://github.com/raikb/gerd/tree/master/examples).
 ```python
 from gerd import models
 import pandas as pd
