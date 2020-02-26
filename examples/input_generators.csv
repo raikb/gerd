@@ -1,0 +1,6 @@
+name,area,p_min,p_max,min_up_time,min_dn_time,startup_costs,p_must_run
+nuc,de,320,1000,130,130,50000,0
+lign,de,150,800,20,20,30000,0
+coal,de,150,1000,16,16,30000,0
+cc,de,80,700,8,8,35000,0
+gt,de,20,350,1,1,4000,0
