@@ -1,4 +1,5 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+![Python 3.6](https://github.com/raikb/gerd/workflows/Python%203.6/badge.svg)
 ![Python 3.7](https://github.com/raikb/gerd/workflows/Python%203.7/badge.svg)
 ![Python 3.8](https://github.com/raikb/gerd/workflows/Python%203.8/badge.svg)
 
