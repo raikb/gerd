@@ -13,6 +13,7 @@ Hopefully, gerd can be of use for someone.
 ## What is gerd?
 
 **gerd.Dispatch** is an easy-to-use multi-area power market model that applies mixed-integer programming (MIP) and relaxed MIP (RMIP) for solving.
+The full mathematical formulation of **gerd.Dispatch**  can be found [here](https://github.com/raikb/gerd/blob/master/docs/gerd_mathematical_formulation.pdf).
 
 ### **gerd.Dispatch** allows you to model:
 * Power prices
@@ -77,7 +78,7 @@ Possible extension of **gerd.Dispatch**:
 * Advanced time series input checking
 
 ## Acknowledgments
-* Unit-commitment equations have been inspired by:
+* Unit-commitment equations and the example data have been inspired by:
   - Kerstin Dächert and Christoph Weber: Linear reformulations of the unit commitment problem, OR 2016 Hamburg, 1.9.2016
 * Many ideas, especially the rolling horizon optimization implementation, are taking from:
   - [Chi Kong Chyong, David Newbery and Thomas McCarty: A Unit Commitment and Economic Dispatch Model of the GB Electricity Market – Formulation and Application to Hydro Pumped Storage. 2019, CWPE1968](http://www.econ.cam.ac.uk/research-files/repec/cam/pdf/cwpe1968.pdf)
