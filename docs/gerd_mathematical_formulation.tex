@@ -1,0 +1,115 @@
+\documentclass[a4paper,11pt]{article}
+\pagestyle{empty}
+\usepackage{geometry}
+\geometry{margin=1.3cm}
+\usepackage[utf8]{inputenc}
+
+\usepackage{amsmath}
+\usepackage{multicol}
+\setlength{\columnsep}{1.1cm}
+\usepackage{pxfonts}
+
+\usepackage{enumitem}
+\setlist{noitemsep,nolistsep}
+
+\begin{document}
+
+\begin{multicols}{2}
+[
+\section*{gerd.Dispatch}
+For the sake of simplicity, all equations are stated for the one area case. In the model, equation \ref{eq:balance} needs to hold for each area.
+Equations \ref{eq:min_dn_time}, \ref{eq:min_up_time} and \ref{eq:must_run} are optional and can be switched on and off in the settings.
+]
+
+
+\noindent Sets
+\begin{description}[labelindent=10pt,labelwidth=40pt]
+\item[$g$]  Generator
+\item[$i$]  Interconnector
+\item[$s$]  Storage
+\item[$t$]  Time
+\end{description}
+
+\noindent Variables
+\begin{description}[labelindent=10pt,labelwidth=40pt]
+\item[$u_{g,t}$]    Status (on/off) of generator $g$ at $t$
+\item[$v_{g,t}$]    Start-up of generator $g$ at $t$
+\item[$w_{g,t}$]    Shut-down of generator $g$ at $t$
+\item[$p_{g,t}$]    Production of generator $g$ at $t$
+\item[$c_{s,t}$]    Charge of storage $s$ at $t$
+\item[$d_{s,t}$]    Discharge of storage $s$ at $t$
+\item[$x_{i,t}$]    Interconnector flow over $i$ at $t$
+\end{description}
+
+\noindent Parameters
+\begin{description}[leftmargin=!,labelwidth=40pt,labelindent=10pt]
+\item[$DT_{t}$]             Demand at $t$
+\item[$P_g^{max}$]          Maximum power output of generator $g$
+\item[$P_g^{min}$]          Minimum power output of generator $g$
+\item[$P_{g,t}^{must-run}$] Must-run power of generator $g$ at $t$
+\item[$UT_g$]               Minimum up-time of generator $g$
+\item[$DT_g$]               Minimum down-time of generator $g$
+\item[$C_{g,t}^{var}$]      Variable costs of generator $g$ at $t$
+\item[$C_{g,t}^{start}$]    Start-up costs of generator $g$ at $t$
+\item[$S_{s}^{max}$]        Maxmimum capacity of storage $a$
+\item[$S_{s}^{ini}$]        Initial capacity of storage $a$
+\item[$\etaup_{s}$]         Efficiency of charging of storage $s$
+\item[$K_{s}$]              Maximum charging and discharging capacity of storage $s$
+\item[$X_{i,t}$]              Interconnector capacity of $i$ at $t$
+\end{description}
+
+%\vfill\null
+\columnbreak
+
+
+
+Objective function
+\begin{subequations}
+\begin{equation}
+\!\min \sum_g \sum_t p_{g,t} \cdot C_{g,t}^{var} + v_{g,t} \cdot C_{g,t}^{start} \label{eq:optProb}
+\end{equation}
+\end{subequations}
+
+Energy balance
+\begin{subequations}
+\begin{align}
+&\sum_g p_{g,t} + \sum_i x_{i,t} - \sum_s c_{s,t} + \sum_s d_{s,t} - DT_{t} =  0 \label{eq:balance}
+\end{align}
+\end{subequations}
+
+Generators
+\begin{subequations}
+\begin{align}
+p_{g,t} &\geq P_g^{min} \cdot u_{g,t}\label{eq:p_min}\\
+p_{g,t} &\leq P_g^{max} \cdot u_{g,t}\label{eq:p_max}\\
+\sum_{\tau=t-UT_g +1}^t v_{g,\tau} &\leq u_{g,t}\label{eq:min_up_time}\\
+\sum_{\tau=t-DT_g +1}^t w_{g,\tau} &\leq 1 - u_{g,t} \label{eq:min_dn_time}\\
+u_{g,t} - u_{g,t-1} &= v_{g,t} - w_{g,t} \label{eq:on_off}\\
+p_{g,t} &\geq P_{g,t}^{must-run} \cdot u_{g,t} \label{eq:must_run}
+\end{align}
+\end{subequations}
+
+Storages
+\begin{subequations}
+\begin{align}
+c_{s,t} &\leq K_{s}\label{eq:charing_max}\\
+d_{s,t} &\leq K_{s} \label{eq:discharging_max}\\
+\sum_{\tau | \tau \leq t} (\etaup_{s} \cdot c_{s,\tau} - d_{s,\tau}) &\leq S_{s}^{max}\label{eq:cap_max}\\
+\sum_{\tau | \tau \leq t} (d_{s,\tau} - \etaup_{s} \cdot c_{s,\tau}) &\leq S_{s}^{ini}\label{eq:cap_ini}
+\end{align}
+\end{subequations}
+
+Cross-border flows
+\begin{subequations}
+\begin{align}
+x_{i,t} &\leq X_{i,t}\label{eq:flow_max}\\
+x_{i,t} &\geq -X_{i,t}\label{eq:flow_min}
+\end{align}
+\end{subequations}
+
+
+
+
+\end{multicols}
+
+\end{document}
