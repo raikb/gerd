@@ -12,7 +12,6 @@ relaxed MIP (RMIP) or both consecutively. If the focus is on dispatch,
 take MIP. If the focus is on prices and not so much on the binary
 dispatch variables, take RMIP. If both are important, let the model run both.
 If computation time is the dominating factor, use only RMIP.'''
-import itertools
 import logging
 import math
 import numpy as np
@@ -423,7 +422,7 @@ class Dispatch:
             else:
                 # Get the cut-off from the previous horizon
                 # because we have to optimize these timestamps again
-                h_before_cutoff = h_idx_ts_before[-(
+                h_before_cutoff = h_idx_ts_before[-(  # noqa: F821
                     self.nr_cut_off_steps + 1):]
                 # Append current horizon to the time index
                 model_h.idx_ts = h_before_cutoff.append(h_idx_ts)
@@ -432,22 +431,26 @@ class Dispatch:
                 # been made a long time ago and up and down times are no
                 # longer relevant
                 if self.model_generators:
-                    if not on_ini.index.intersection(model_h.idx_ts).empty:
+                    if not on_ini.index.intersection(  # noqa: F821
+                        model_h.idx_ts).empty:
                         # Take only timestamps modeled in h
-                        on_ini = on_ini.loc[
-                            on_ini.index.intersection(model_h.idx_ts)]
+                        on_ini = on_ini.loc[  # noqa: F821
+                            on_ini.index.intersection(  # noqa: F821
+                                model_h.idx_ts)]
                         # Add on_ini state of the first hour
-                        on_ini.iloc[0] = solution_final[
+                        on_ini.iloc[0] = solution_final[  # noqa: F821
                             'on'].iloc[-1]
                         # Solve
                         solver = model_solver.ModelSolver(
-                            model_h, prod_ini=prod_ini, on_ini=on_ini)
+                            model_h, prod_ini=prod_ini,  # noqa: F821
+                            on_ini=on_ini)
                     else:
                         # Solve
                         solver = model_solver.ModelSolver(
                             model_h,
-                            prod_ini=prod_ini,
-                            on_ini=solution_final['on'].iloc[-1].to_frame().T)
+                            prod_ini=prod_ini,  # noqa: F821
+                            on_ini=solution_final[  # noqa: F821
+                                'on'].iloc[-1].to_frame().T)
                 else:
                     solver = model_solver.ModelSolver(model_h)
 
@@ -486,7 +489,7 @@ class Dispatch:
                     self.input_gens['min_dn_time'])
                 on_ini = _get_initial_on_states(last_action)
 
-                prod_ini = solution_final['prod'].iloc[-1]
+                prod_ini = solution_final['prod'].iloc[-1]  # noqa: F841
 
             # Initial storage capacities for the next horizon.
             # Needs to be changed in self because input_stos is taken
@@ -497,7 +500,7 @@ class Dispatch:
                     'storage_cap'].iloc[-1].copy()
 
             # Remember last horizon's time index for cutting off
-            h_idx_ts_before = h_idx_ts
+            h_idx_ts_before = h_idx_ts   # noqa: F841
 
         # Return initial cap_ini
         if self.model_storages:

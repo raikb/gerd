@@ -1,8 +1,5 @@
 import pandas as pd
 import pytest
-import sys
-
-from context import models
 
 
 @pytest.fixture
@@ -142,8 +139,8 @@ def dispatch_input_one_area_dn_time():
     # Variable costs
     input_var_costs = pd.DataFrame(
         data={'de_coal': [15] * len(time_index),
-            'de_gas_long_dn_time': [30] * len(time_index),
-            'de_gas': [40 * len(time_index)]},
+              'de_gas_long_dn_time': [30] * len(time_index),
+              'de_gas': [40 * len(time_index)]},
         index=time_index)
     input_var_costs.index.name = 'time'
 
@@ -245,4 +242,3 @@ def dispatch_input_only_storage_long():
     input_data = {'storages': input_storages, 'load': input_load}
 
     return input_data
-
