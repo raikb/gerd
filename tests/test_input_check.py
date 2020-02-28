@@ -3,7 +3,6 @@ Classes are used to structure tests by functions.'''
 import pandas as pd
 import pytest
 import re
-import sys
 
 from context import input_check
 
