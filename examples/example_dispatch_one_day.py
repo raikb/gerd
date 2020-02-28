@@ -21,7 +21,7 @@ input_data = {'generators': input_gens,
               'load': input_load,
               'var_costs': input_var_costs}
 
-# %% Optimize without pump storage
+# %% Optimize as MIP first and then as a RMIP without pump storage
 my_model = models.Dispatch(input_data, model_storages=False)
 my_model.optimize()
 # Look at the results
@@ -33,5 +33,12 @@ my_model = models.Dispatch(input_data)
 my_model.optimize()
 # Look at the results
 my_model.solution['prices'].plot()
-my_model.solution['prod'].plot(kind='bar', stacked=True)
 my_model.solution['storage_cap'].plot()
+# Charging and discharging
+charging = - my_model.solution['charge'].rename(
+    columns={'de_pump': 'charging'})
+discharging = my_model.solution['discharge'].rename(
+    columns={'de_pump': 'discharging'})
+prod_incl_pump = my_model.solution['prod'].join(charging.join(discharging))
+# Production including pump storage
+prod_incl_pump.plot(kind='bar', stacked=True)
