@@ -69,6 +69,7 @@ my_model.solution['prices'].plot()
 
 ### More examples as Jupyter notebooks:
 * [Reading data from csv for one day and optimizing](https://github.com/raikb/gerd/blob/master/examples/example_dispatch_one_day_csv.ipynb)
+* [Reading data from csv for one year and applying rolling horizon optimization](https://github.com/raikb/gerd/blob/master/examples/example_dispatch_one_year_csv.ipynb)
 
 ## Current limitations
 * The rolling horizon optimization works currently only for hourly input data and the index needs to be a pandas DatetimeIndex.
