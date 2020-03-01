@@ -32,9 +32,8 @@ The full mathematical formulation of **gerd.Dispatch**  can be found [here](http
   - Options to switch on and off model features still exist
 * Rolling horizon optimization for cutting down run-time can be chosen
 * Different solving options available:
-  - MIP if the dispatch is important
-  - RMIP if prices are important and if computational speed counts
-  - Combination of MIP and RMIP if the dispatch and the prices are important
+  - MIP if only the dispatch is needed
+  - MIP followed by a RMIP if the dispatch and the prices are important
 
 ## How to use it?
 
@@ -68,6 +67,9 @@ my_model.optimize()
 my_model.solution['prices'].plot()
 ```
 
+### More examples as Jupyter notebooks:
+* [Reading data from csv for one day and optimizing](https://github.com/raikb/gerd/blob/master/examples/example_dispatch_one_day_csv.ipynb)
+
 ## Current limitations
 * The rolling horizon optimization works currently only for hourly input data and the index needs to be a pandas DatetimeIndex.
 
@@ -76,6 +78,7 @@ Possible extension of **gerd.Dispatch**:
 * Definition of dynamic power plant (un)availabilities
 * Modeling of spinning reserves
 * Advanced time series input checking
+* Further options for linearization 
 
 ## Acknowledgments
 * Unit-commitment equations and the example data have been inspired by:

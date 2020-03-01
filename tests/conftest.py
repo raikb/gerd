@@ -1,6 +1,8 @@
 import pandas as pd
 import pytest
 
+# Run for testing: pytest --cov=gerd --cov-report term-missing tests
+
 
 @pytest.fixture
 def dispatch_input_one_area():

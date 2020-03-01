@@ -17,7 +17,7 @@ _mandatory_input_columns = {
 _index_names = {'generators': 'name', 'storages': 'name',
                 'load': 'time', 'ntcs': 'time', 'var_costs': 'time'}
 
-_model_types = ['mip', 'rmip', 'mip_rmip']
+_model_types = ['mip', 'mip_rmip']
 
 
 # %% Check and adjust input format/data
@@ -95,12 +95,10 @@ def check_model_type(model_type: str, model_generators: bool):
         raise ValueError(f'Unknown solver type.'
                          'Please choose among: {_model_types}')
 
-    is_mip = ((model_type == 'mip') or (model_type == 'mip_rmip'))
-
-    if is_mip and not model_generators:
-        model_type = 'rmip'
-        logger.warning('Solving a MIP without modeling generators is '
-                       'not allowed. The model type is changed to RMIP.')
+    if (model_type == 'mip_rmip') and not model_generators:
+        model_type = 'mip'
+        logger.warning('Solving a MIP and RMIP without modeling generators is '
+                       'not allowed. The model type is changed to MIP.')
 
     return model_type
 

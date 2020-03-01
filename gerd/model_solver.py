@@ -63,10 +63,10 @@ class ModelSolver:
         # Initial values (only used with rolling optimization)
         self.initial_values = initial_values
 
-        if 'prod_ini' in self.initial_values.keys():
-            self.has_ini_prod_values = True
-        else:
-            self.has_ini_prod_values = False
+        # if 'prod_ini' in self.initial_values.keys():
+        #     self.has_ini_prod_values = True
+        # else:
+        #     self.has_ini_prod_values = False
 
         if 'on_ini' in self.initial_values.keys():
             self.has_ini_on_values = True
@@ -77,26 +77,12 @@ class ModelSolver:
         if model.__class__.__name__ == 'Dispatch':
 
             if model.model_type == 'mip_rmip':
-                # Solve MIP first
-                self.optimize_mip(model)
-
-                # Save integer variable solutions
-                self.var_on_mip = self.get_var_solution_as_dict(self.var_on)
-                self.var_start_mip = self.get_var_solution_as_dict(
-                    self.var_start)
-                self.var_stop_mip = self.get_var_solution_as_dict(
-                    self.var_stop)
-
-                # Solve linear problem with fixed integer variables
-                self.optimize_rmip(model)
-
-            elif model.model_type == 'rmip':
-                # Solve linear problem
-                self.optimize_rmip(model)
+                # Solve MIP and RMIP
+                self.build_and_optimize_mip_rmip(model)
 
             elif model.model_type == 'mip':
                 # Solve MIP
-                self.optimize_mip(model)
+                self.build_and_optimize_mip(model)
 
         else:
             raise ValueError(f'Unknown model type {model.model_type}.')
@@ -380,10 +366,11 @@ class ModelSolver:
 
         for k1 in values2fasten.keys():
             for k2 in values2fasten[k1].keys():
-                self.solver.Add(var[k1][k2] == values2fasten[k1][k2])
+                if not np.isnan(values2fasten[k1][k2]):
+                    self.solver.Add(var[k1][k2] == values2fasten[k1][k2])
 
     def fasten_gen_int_variables(
-            self, model, var_on_res, var_start_res, var_stop_res):
+            self, var_on_res, var_start_res, var_stop_res):
         '''Fastens all integer generator variabels.'''
 
         self.fasten_variable(self.var_on, var_on_res)
@@ -444,32 +431,99 @@ class ModelSolver:
         if get_pywraplp_solver_status_msg(self.status) != 'optimal':
             sys.exit('Solver status is not optimal. Optimization stopped.')
 
-    def optimize_mip(self, model):
-        '''Builds and optimizes a MIP model.'''
+    def build_and_optimize_mip(self, model):
+        '''Initializes and defines variables, adds constraints depending
+        on the input, defines the objective function for a
+        dispatch MIP problem and solves it.'''
 
         logger.info('Build and optimize MIP')
         self.set_solver('mip')
-        self.build_dispatch_problem(model)
-        if self.has_ini_prod_values:
-            self.fasten_prod_ini(self.initial_values['prod_ini'])
+
+        # Initialize variables
+        if model.model_generators:
+            self.init_gen_variables(model)
+        if model.model_storages:
+            self.init_sto_variables(model)
+        if model.model_exchange:
+            self.init_exchange_variables(model)
+
+        # Add generator constraints (optional)
+        if model.model_generators:
+            self.add_constr_prod_limits(model)
+            self.add_constr_gen_logic(model)
+            if model.model_min_up_time:
+                self.add_constr_min_up_time(model)
+            if model.model_min_dn_time:
+                self.add_constr_min_dn_time(model)
+            if model.model_must_run:
+                self.add_constr_must_run(model)
+
+        # Add storage constraints (optional)
+        if model.model_storages:
+            self.add_constr_storages(model)
+
+        # Add exchange constraints (optional)
+        if model.model_exchange:
+            self.add_constr_exchange(model)
+
+        # Add common constraints and the objective function
+        self.add_constr_energy_balance(model)
+        self.add_objective_function(model)
+
+        # Fasten possibly initial variable values
         if self.has_ini_on_values:
             self.fasten_on_ini(self.initial_values['on_ini'])
+
         self.optimize()
 
-    def optimize_rmip(self, model):
-        '''Builds and optimizes a RMIP model.'''
+    def build_and_optimize_mip_rmip(self, model):
+        '''Initializes and defines variables, adds constraints depending
+        on the input, defines the objective function for a
+        dispatch MIP problem and solves it. After this, a RMIP is
+        build and solved for computing prices.'''
+
+        self.build_and_optimize_mip(model)
+
+        # Save integer variable solutions
+        self.var_on_mip = self.get_var_solution_as_dict(self.var_on)
+        self.var_start_mip = self.get_var_solution_as_dict(
+            self.var_start)
+        self.var_stop_mip = self.get_var_solution_as_dict(
+            self.var_stop)
 
         logger.info('Build and optimize RMIP')
         self.set_solver('rmip')
-        self.build_dispatch_problem(model)
-        if self.has_ini_prod_values:
-            self.fasten_prod_ini(self.initial_values['prod_ini'])
-        if self.has_ini_on_values:
-            self.fasten_on_ini(self.initial_values['on_ini'])
-        if model.model_type == 'mip_rmip':
-            self.fasten_gen_int_variables(
-                model, self.var_on_mip, self.var_start_mip,
-                self.var_stop_mip)
+
+        # Initialize variables
+        if model.model_generators:
+            self.init_gen_variables(model)
+        if model.model_storages:
+            self.init_sto_variables(model)
+        if model.model_exchange:
+            self.init_exchange_variables(model)
+
+        # Add generator constraints (optional)
+        if model.model_generators:
+            self.add_constr_prod_limits(model)
+            if model.model_must_run:
+                self.add_constr_must_run(model)
+
+        # Add storage constraints (optional)
+        if model.model_storages:
+            self.add_constr_storages(model)
+
+        # Add exchange constraints (optional)
+        if model.model_exchange:
+            self.add_constr_exchange(model)
+
+        # Add common constraints and the objective function
+        self.add_constr_energy_balance(model)
+        self.add_objective_function(model)
+
+        # Fasten integer variables already optimized in the foregone MIP
+        self.fasten_gen_int_variables(
+            self.var_on_mip, self.var_start_mip, self.var_stop_mip)
+
         self.optimize()
 
     def get_objective_value(self):

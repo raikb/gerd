@@ -110,11 +110,11 @@ class Test_check_model_type():
             input_check.check_model_type('mip_mip', model_generators)
 
     def test_mip_wio_generators(self):
-        '''Model type should be set to rmip if a mip is chosen without
+        '''Model type should be set to mip if a mip is chosen without
         modeling generators.'''
 
-        assert input_check.check_model_type('mip', False) == 'rmip'
-        assert input_check.check_model_type('mip_rmip', False) == 'rmip'
+        assert input_check.check_model_type('mip', False) == 'mip'
+        assert input_check.check_model_type('mip_rmip', False) == 'mip'
 
 
 class Test_check_generators_power_bounds():
