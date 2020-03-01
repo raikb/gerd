@@ -47,82 +47,60 @@ def _check_if_column_exists(df: pd.DataFrame, column_name: str):
         return False
 
 
-def _get_last_generator_action(
-        solution: dict, min_up_time: pd.Series, min_dn_time: pd.Series):
-    '''This function returns the timestamps of the last generator
-    actions (start and stop). Based on the minimum up-time and down-time,
-    it is calculated until which timestamp the generator needs to be
-    on or off.'''
-
-    # Initialize the DataFrame that contains all generators' last actions
-    last_action = pd.DataFrame(
-        index=solution['start'].columns,
-        columns=['start', 'stop', 'keep_on_till', 'keep_off_till'],
-        data=np.nan)
-
-    # Add minimum up and down times
-    last_action['min_up_time'] = min_up_time.copy()
-    last_action['min_dn_time'] = min_dn_time.copy()
-
-    # Take the last start and and stop if existing
-    for c in solution['start'].columns:
-        start_actions = solution['start'].index[solution['start'][c] != 0]
-        if not start_actions.empty:
-            last_action.loc[c, 'start'] = start_actions[-1]  # Last one
-
-        stop_actions = solution['stop'].index[solution['stop'][c] != 0]
-        if not stop_actions.empty:
-            last_action.loc[c, 'stop'] = stop_actions[-1]  # Last one
-
-    # Compute until generators need to be on or off
-    if not all(last_action['start'].isna()):
-        # last_action['keep_on_till'] = (
-        #     last_action['start'] + pd.to_timedelta(min_up_time, unit='h'))
-        last_action['keep_on_till'] = last_action.apply(
-            lambda x: x['start'] + pd.to_timedelta(
-                x['min_up_time'] - 1, unit='h'), axis=1)
-
-    if not all(last_action['stop'].isna()):
-        # last_action['keep_off_till'] = (
-        #     last_action['stop'] + pd.to_timedelta(min_dn_time, unit='h'))
-        last_action['keep_off_till'] = last_action.apply(
-            lambda x: x['stop'] + pd.to_timedelta(
-                x['min_dn_time'] - 1, unit='h'), axis=1)
-
-    return last_action
-
-
-def _get_initial_on_states(last_action: pd.DataFrame):
+def _get_on_ini(
+        on_all: pd.Series, idx_ts_new: pd.date_range,
+        min_up_time: int, min_dn_time: int):
     '''A rolling horizon optimization requires generator stats
     to be handed over to the next horizon as an initial state. This
-    function computes this for the on state based on last_action
-    and returns a pandas DataFrame.
+    function computes this for the on state based on previous states (on_all),
+    the timestamps of the next horizon and the minimum up/down time.
+    This function takes one generator (pandas Series) and returns a pandas
+    Series,
 
-    :param last_action: Output of _get_last_generator_action()
-    :rtype: pd.DataFrame'''
+    :param on_all: Previous on states for one generator as pd.Series
+    :param idx_ts_new: Time index of the next horizon
+    :param min_up_time: Minimum up time
+    :param min_dn_time: Minimum down time
+    :rtype: pd.Series'''
 
-    # Get relevant timestamps for on_ini
-    t_first = min([pd.to_datetime(last_action['start']).min(),
-                  pd.to_datetime(last_action['stop']).min()])
-    t_last = max([pd.to_datetime(last_action['keep_on_till']).max(),
-                 pd.to_datetime(last_action['keep_off_till']).max()])
-    # Initialize on_ini
-    on_ini = pd.DataFrame(
-        index=pd.date_range(t_first, t_last, freq='h'),
-        columns=last_action.index,
-        data=np.nan)
+    # Cut-off on states
+    on_all = on_all[:idx_ts_new[0]].copy()
+    on_trans = on_all[-1:]  # Save the transition date for later
+    on_all = on_all[:-1]  # Take away the transition date
 
-    # Fill with on data (0 or 1)
-    # Power plants that must be kept on
-    if ('keep_on_till' in last_action.columns):
-        for index, row in last_action.iterrows():
-            if isinstance(row['start'], pd.Timestamp):
-                on_ini.loc[row['start']:row['keep_on_till'], index] = 1
-    # Power plants that must be kept off
-    if 'keep_off_till' in last_action.columns:
-        for index, row in last_action.iterrows():
-            if isinstance(row['stop'], pd.Timestamp):
-                on_ini.loc[row['stop']:row['keep_off_till'], index] = 0
+    # Count consecutively appearing values
+    # I.e.: # 0, 0, 1, 1, 1, 0 -> 1, 2, 1, 2, 3, 1
+    consecutive_value_count = (
+        on_all.groupby((on_all != on_all.shift()).cumsum()).cumcount() + 1)
+
+    # For how many timestamps is the generator on or off
+    # 4 means it has been on for 4 timestamps
+    on_for = on_all * consecutive_value_count
+    off_for = (1-on_all) * consecutive_value_count
+
+    # Get forced initial on/off states
+    on_ini = pd.Series(dtype=int)
+    data = list()
+
+    # On states to append
+    if on_for[-1] > 0:
+        data = data + [1] * int(min_up_time - on_for[-1])
+    # Off states to append
+    elif off_for[-1] > 0:
+        data = data + [0] * int(min_dn_time - off_for[-1])
+
+    # Any data?
+    if len(data) > 0:
+        series_len = min(len(data), len(idx_ts_new))
+        on_ini = on_ini.append(
+            pd.Series(
+                data=data[:series_len],
+                index=idx_ts_new[:series_len], dtype=int))
+    # If not, take what is already know about the first timestamp
+    else:
+        on_ini = on_ini.append(on_trans)
+
+    on_ini.name = on_all.name
 
     return on_ini
 
@@ -327,18 +305,17 @@ class Dispatch:
         return solution
 
     def optimize(
-            self, model_type: str = 'rmip',
+            self, model_type: str = 'mip_rmip',
             rolling_optimization: bool = False,
             **rolling_opt_parameters):
         '''Hands the model over to ModelSolver, solves it and returns
         the results as pandas DataFrames as well as the objective value.
         The mip option does not return dual values and thus no prices.
-        If the focus is on dispatch, take mip. If the focus is on prices
-        and not so much on the binary dispatch variables, take rmip.
-        If both are important, take mip_rmip.
+        If the focus is on dispatch, take mip. If the focus is also on
+        prices take mip_rmip.
 
         :param model_type: How to solve the model.
-                           Options are: mip, rmip (default), mip_rmip
+                           Options are: mip, mip_rmip (default)
         :param rolling_optimization: Apply rolling horizon optimization
                                      (True/False (default))'''
 
@@ -361,7 +338,7 @@ class Dispatch:
                                     'for rolling optimization.')
                 else:
                     logger.warning('Only hourly input data supported '
-                                   ' at the moment')
+                                   'at the moment')
                     self.solution = self._optimize_rolling(
                         **rolling_opt_parameters)
         else:
@@ -381,10 +358,6 @@ class Dispatch:
         '''Optimized the problem applying rolling optimization. The number
         of horizons and the number of cut-off time steps can be fined.
         Otherwise, they are estimated.'''
-
-        # Save a copy of cap_ini of storages because it will be changed
-        if self.model_storages:
-            cap_ini_copy = self.input_stos['cap_ini'].copy()
 
         # Take optional optimization parameters or estimate them
         if 'nr_opt_horizons' in rolling_opt_parameters.keys():
@@ -407,67 +380,74 @@ class Dispatch:
         # Split the data set in the rolling horizons
         idx_ts_split = np.array_split(self.idx_ts, self.nr_opt_horizons)
 
-        # Go through all horizons
-        for h, h_idx_ts in enumerate(idx_ts_split, 1):
-            logger.info(f'Started horizon {h} from {self.nr_opt_horizons}')
+        # Run first horizon
+        model_h = self
+        model_h.idx_ts = idx_ts_split[0]
+        solver = model_solver.ModelSolver(model_h)
+
+        # Extract solutions for this horizon and write them in a dict
+        solution_h = self.return_solution_from_solver(solver)
+
+        # Cut-off solutions (last nr_cut_off_steps steps not needed)
+        for sol_key, sol_df in solution_h.items():
+            solution_h[sol_key] = sol_df[:-self.nr_cut_off_steps]
+
+        # Append solution of this horizon to the final solution to return it
+        solution_final = solution_h.copy()
+
+        # Go through all remaining horizons
+        for h, h_idx_ts in enumerate(idx_ts_split[1:], 1):
+            logger.info(f'Started horizon {h + 1} from {self.nr_opt_horizons}')
             # Hand over the model for this horizon
             model_h = self
 
-            # Solve normally if it is the first timestamp
-            if h == 1:
-                model_h.idx_ts = h_idx_ts
-                solver = model_solver.ModelSolver(model_h)
-            # If after the first horizon, hand over previous
-            # variable states to the solver
+            # The time index of the last horizon
+            h_idx_ts_last = idx_ts_split[h-1]
+            # Take only the cut-off period because it will be the beginning
+            # of this horizon and hence computed twice
+            h_idx_ts_last_cutoff = h_idx_ts_last[-(
+                self.nr_cut_off_steps + 1):]
+
+            # Append current horizon to the time index
+            model_h.idx_ts = h_idx_ts_last_cutoff.append(h_idx_ts)
+
+            # Get previous system states to hand over
+            if self.model_generators:
+                # Get on_ini (on/off states for the current period) based
+                # on all foregone on/off states.
+                on_all = solution_final['on'].copy()
+                on_ini = on_all.apply(
+                    lambda x: _get_on_ini(
+                        x,
+                        model_h.idx_ts,
+                        self.input_gens.loc[x.name, 'min_up_time'],
+                        self.input_gens.loc[x.name, 'min_dn_time']))
+
+            if self.model_storages:
+                # Initial storage capacities for the next horizon. Must be
+                # taken from the timestamp before the transition timestamp.
+                # That is why iloc[-2] is taken.
+                model_h.input_stos['cap_ini'] = solution_final[
+                    'storage_cap'].iloc[-2].copy()
+
+            # Solve
+            if self.model_generators:
+                solver = model_solver.ModelSolver(
+                    model_h, on_ini=on_ini)
             else:
-                # Get the cut-off from the previous horizon
-                # because we have to optimize these timestamps again
-                h_before_cutoff = h_idx_ts_before[-(  # noqa: F821
-                    self.nr_cut_off_steps + 1):]
-                # Append current horizon to the time index
-                model_h.idx_ts = h_before_cutoff.append(h_idx_ts)
-                # Get previous on states and hand over
-                # Relevant on states can be irrelevant if decisions have
-                # been made a long time ago and up and down times are no
-                # longer relevant
-                if self.model_generators:
-                    if not on_ini.index.intersection(  # noqa: F821
-                        model_h.idx_ts).empty:
-                        # Take only timestamps modeled in h
-                        on_ini = on_ini.loc[  # noqa: F821
-                            on_ini.index.intersection(  # noqa: F821
-                                model_h.idx_ts)]
-                        # Add on_ini state of the first hour
-                        on_ini.iloc[0] = solution_final[  # noqa: F821
-                            'on'].iloc[-1]
-                        # Solve
-                        solver = model_solver.ModelSolver(
-                            model_h, prod_ini=prod_ini,  # noqa: F821
-                            on_ini=on_ini)
-                    else:
-                        # Solve
-                        solver = model_solver.ModelSolver(
-                            model_h,
-                            prod_ini=prod_ini,  # noqa: F821
-                            on_ini=solution_final[  # noqa: F821
-                                'on'].iloc[-1].to_frame().T)
-                else:
-                    solver = model_solver.ModelSolver(model_h)
+                solver = model_solver.ModelSolver(model_h)
 
             # Extract solutions for this horizon and write them in a dict
             solution_h = self.return_solution_from_solver(solver)
 
             # Cut-off solutions (last nr_cut_off_steps steps not needed)
-            if h == self.nr_opt_horizons:
+            if (h + 1) == self.nr_opt_horizons:
                 # The overlapping timestamp is computed twice. Once
                 # at the end of the foregone horizon and again at the
                 # beginning of the current horizon. That is why,
                 # the first value is not taken here.
                 for sol_key, sol_df in solution_h.items():
                     solution_h[sol_key] = sol_df[1:]
-            elif h == 1:
-                for sol_key, sol_df in solution_h.items():
-                    solution_h[sol_key] = sol_df[:-self.nr_cut_off_steps]
             else:
                 # Same here with the first value
                 # (cf. h == self.nr_opt_horizons).
@@ -475,36 +455,9 @@ class Dispatch:
                     solution_h[sol_key] = sol_df[1:-self.nr_cut_off_steps]
 
             # Append solution of this horizon to the final solution
-            if h == 1:
-                solution_final = solution_h.copy()
-            else:
-                for sol_key, sol_df in solution_h.items():
-                    solution_final[sol_key] = solution_final[sol_key].append(
-                        solution_h[sol_key])
-
-            # Initial generator states for next horizon (on_ini, prod_ini)
-            if self.model_generators:
-                last_action = _get_last_generator_action(
-                    solution_final, self.input_gens['min_up_time'],
-                    self.input_gens['min_dn_time'])
-                on_ini = _get_initial_on_states(last_action)
-
-                prod_ini = solution_final['prod'].iloc[-1]  # noqa: F841
-
-            # Initial storage capacities for the next horizon.
-            # Needs to be changed in self because input_stos is taken
-            # from self to compute the storage capacity in
-            # return_solution_from_solver()
-            if self.model_storages:
-                self.input_stos['cap_ini'] = solution_final[
-                    'storage_cap'].iloc[-1].copy()
-
-            # Remember last horizon's time index for cutting off
-            h_idx_ts_before = h_idx_ts   # noqa: F841
-
-        # Return initial cap_ini
-        if self.model_storages:
-            self.input_stos['cap_ini'] = cap_ini_copy
+            for sol_key, sol_df in solution_h.items():
+                solution_final[sol_key] = solution_final[sol_key].append(
+                    solution_h[sol_key])
 
         return solution_final
 

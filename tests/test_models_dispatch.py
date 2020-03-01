@@ -38,22 +38,6 @@ class TestPrices:
                 'prices']['de'].iloc[iloc_begin:iloc_end]) == price)
 
     @pytest.mark.parametrize(
-        "t,model_type,price",
-        [['t01', 'rmip', 15], ['t02', 'rmip', 30],
-         ['t03', 'rmip', 30], ['t04', 'rmip', 15],
-         ['t01', 'mip_rmip', 15], ['t02', 'mip_rmip', 30],
-         ['t03', 'mip_rmip', 30], ['t04', 'mip_rmip', 15]])
-    def test_rmip_vs_mip_rmip(
-            self, dispatch_input_one_area, model_type, t, price):
-        '''Prices should be the same for both model types because RMIP
-        is running at the end.'''
-        dispatch = models.Dispatch(
-            input_data=dispatch_input_one_area, model_storages=False)
-        dispatch.optimize(model_type)
-
-        assert round(dispatch.solution['prices'].loc[t, 'de']) == price
-
-    @pytest.mark.parametrize(
         "t,area,price", [['t01', 'de', 5], ['t02', 'de', 15],
                          ['t01', 'at', 5], ['t02', 'at', 15],
                          ['t01', 'fr', 5], ['t02', 'fr', 5]])
@@ -167,7 +151,7 @@ class TestStorages():
             self, dispatch_input_only_storage, t, charge, discharge):
         dispatch = models.Dispatch(
             input_data=dispatch_input_only_storage)
-        dispatch.optimize('rmip')
+        dispatch.optimize('mip')
 
         assert dispatch.solution['charge'].loc[t, 'de_pump1'] == charge
         assert dispatch.solution['discharge'].loc[t, 'de_pump1'] == discharge
@@ -178,7 +162,7 @@ class TestStorages():
 
         dispatch = models.Dispatch(
             input_data=dispatch_input_only_storage_long)
-        dispatch.optimize('rmip', rolling_optimization=False)
+        dispatch.optimize(rolling_optimization=False)
 
         assert dispatch.solution['storage_cap'].iloc[-1].values == 0
         assert all(dispatch.solution['charge'].iloc[::2] == 10)
@@ -186,11 +170,11 @@ class TestStorages():
 
     def test_long_test_case_rolling(
             self, dispatch_input_only_storage_long):
-        '''Should yield same results as  test_long_test_case_single()'''
+        '''Should yield same results as test_long_test_case_single()'''
 
         dispatch = models.Dispatch(
             input_data=dispatch_input_only_storage_long)
-        dispatch.optimize('rmip', rolling_optimization=True)
+        dispatch.optimize(rolling_optimization=True)
 
         assert dispatch.solution['storage_cap'].iloc[-1].values == 0
         assert all(dispatch.solution['charge'].iloc[::2] == 10)

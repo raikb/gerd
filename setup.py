@@ -5,7 +5,7 @@ with open('README.md', 'r') as fh:
 
 setuptools.setup(
     name='gerd',
-    version='0.0.4',
+    version='0.1.0',
     author='Raik Becker',
     description='Easy-to-use multi-area power market model',
     long_description=long_description,
